@@ -53,7 +53,10 @@ jobs:
         run: |
           git config user.name  "inspection-bot"
           git config user.email "inspection-bot@users.noreply.github.com"
-          git add data/inspections.db public/data.json data/archive 2>/dev/null || true
+          # One path per call: git adds nothing at all if any path in a list is missing,
+          # and data/archive only exists after the first fiscal-year rollover.
+          git add data/inspections.db public/data.json
+          if [ -d data/archive ]; then git add data/archive; fi
           if git diff --cached --quiet; then
             echo "nothing to commit"
           else
