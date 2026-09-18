@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indian River Inspections</title>
+<meta name="description" content="Restaurant inspection results for Indian River County, Florida, from the state's public DBPR records: emergency closures, the Wall of Shame, the Wall of Fame, and every establishment's full history.">
+<style>
+  :root {
+    --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec;
+    --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+    --rule: #e1e0d9; --rule-2: #c3c2b7;
+    --good: #0ca30c; --good-ink: #006300; --good-bg: #edf7ed;
+    --warning: #fab219; --warning-ink: #7a5200; --warning-bg: #fff6e0;
+    --serious: #ec835a; --serious-ink: #8f3a17; --serious-bg: #fdeee7;
+    --critical: #d03b3b; --critical-ink: #a41f1f; --critical-bg: #fbe9e9;
+    --accent: #2a78d6; --accent-ink: #1c5cab;
+    --shadow: 0 1px 2px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page: #0d0d0d; --surface: #1a1a19; --surface-2: #242423;
+      --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --rule: #2c2c2a; --rule-2: #383835;
+      --good: #0ca30c; --good-ink: #5fd35f; --good-bg: #13281a;
+      --warning: #fab219; --warning-ink: #ffd166; --warning-bg: #2c2410;
+      --serious: #ec835a; --serious-ink: #ffa27f; --serious-bg: #2f1d15;
+      --critical: #d03b3b; --critical-ink: #ff8585; --critical-bg: #331616;
+      --accent: #3987e5; --accent-ink: #86b6ef;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #242423;
+    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --rule: #2c2c2a; --rule-2: #383835;
+    --good: #0ca30c; --good-ink: #5fd35f; --good-bg: #13281a;
+    --warning: #fab219; --warning-ink: #ffd166; --warning-bg: #2c2410;
+    --serious: #ec835a; --serious-ink: #ffa27f; --serious-bg: #2f1d15;
+    --critical: #d03b3b; --critical-ink: #ff8585; --critical-bg: #331616;
+    --accent: #3987e5; --accent-ink: #86b6ef;
+    --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  a { color: var(--accent-ink); }
+  button { font: inherit; color: inherit; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 48px; }
+
+  /* top bar */
+  .top { position: sticky; top: 0; z-index: 5; background: var(--page); border-bottom: 1px solid var(--rule); }
+  .top .wrap { padding-top: 14px; padding-bottom: 12px; }
+  .brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .brand h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+  .brand .sub { color: var(--muted); font-size: 12px; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .seg { display: inline-flex; border: 1px solid var(--rule-2); border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .seg button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; color: var(--ink-2); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--page); }
+  .search { flex: 1 1 220px; min-width: 0; }
+  .search input { width: 100%; padding: 8px 12px; border: 1px solid var(--rule-2); border-radius: 8px;
+                  background: var(--surface); color: var(--ink); font: inherit; }
+  .search input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-top: 12px; }
+  .tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px;
+          text-align: left; cursor: pointer; box-shadow: var(--shadow); }
+  .tile:hover { border-color: var(--rule-2); }
+  .tile .lab { display: flex; gap: 6px; align-items: center; color: var(--ink-2); font-size: 12px; }
+  .tile .val { font-size: 22px; font-weight: 600; line-height: 1.15; margin-top: 2px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+
+  /* sections */
+  section { margin-top: 28px; scroll-margin-top: 170px; }
+  .sh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .sh h2 { font-size: 17px; margin: 0; }
+  .sh .n { color: var(--muted); font-size: 13px; }
+  .sh .why { color: var(--ink-2); font-size: 13px; flex-basis: 100%; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+  .card { display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--rule);
+          border-left-width: 4px; border-radius: 8px; padding: 12px 14px; cursor: pointer; box-shadow: var(--shadow); }
+  .card:hover { border-color: var(--rule-2); }
+  .card:focus-visible, .tile:focus-visible, .seg button:focus-visible, .link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card.closed { border-left-color: var(--critical); }
+  .card.shame { border-left-color: var(--serious); }
+  .card.redeemed { border-left-color: var(--good); }
+  .card.fame { border-left-color: var(--good); }
+  .card.neutral { border-left-color: var(--rule-2); }
+  .card .name { font-weight: 600; font-size: 15px; line-height: 1.3; }
+  .card .where { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .b { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 7px;
+       border-radius: 10px; border: 1px solid transparent; white-space: nowrap; }
+  .b.critical { background: var(--critical-bg); color: var(--critical-ink); border-color: color-mix(in srgb, var(--critical) 40%, transparent); }
+  .b.serious  { background: var(--serious-bg);  color: var(--serious-ink);  border-color: color-mix(in srgb, var(--serious) 40%, transparent); }
+  .b.warning  { background: var(--warning-bg);  color: var(--warning-ink);  border-color: color-mix(in srgb, var(--warning) 50%, transparent); }
+  .b.good     { background: var(--good-bg);     color: var(--good-ink);     border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+  .b.plain    { background: var(--surface-2);   color: var(--ink-2);        border-color: var(--rule); }
+  .latest { margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+  .latest b { color: var(--ink); font-weight: 600; }
+  .more { margin-top: 10px; }
+  .link { background: none; border: 1px solid var(--rule-2); border-radius: 8px; padding: 6px 12px; cursor: pointer; background: var(--surface); }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+  /* detail */
+  .back { margin: 14px 0 8px; }
+  .hero { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; box-shadow: var(--shadow); }
+  .hero h2 { margin: 0; font-size: 22px; line-height: 1.2; letter-spacing: -.01em; }
+  .hero .meta { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .facts b { color: var(--ink-2); font-weight: 600; }
+  .closure { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--critical-bg);
+             border: 1px solid color-mix(in srgb, var(--critical) 35%, transparent); font-size: 13px; }
+  .closure b { color: var(--critical-ink); }
+  .visits { margin-top: 18px; }
+  .visit { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; margin-top: 10px; scroll-margin-top: 90px; }
+  .visit.flag { border-color: color-mix(in srgb, var(--critical) 45%, var(--rule)); }
+  .visit.hl { outline: 2px solid var(--good); outline-offset: 2px; }
+  .vh { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .vh .d { font-weight: 600; }
+  .vh .t { color: var(--ink-2); font-size: 13px; }
+  .vh .r { color: var(--muted); font-size: 12px; flex-basis: 100%; }
+  .counts { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--ink-2); }
+  .counts span { display: inline-flex; align-items: center; gap: 5px; }
+  .bar { display: inline-block; height: 8px; border-radius: 2px; min-width: 2px; vertical-align: middle; }
+  .bar.h { background: var(--critical); } .bar.i { background: var(--serious); } .bar.b { background: var(--muted); }
+  .clean { color: var(--good-ink); font-weight: 600; font-size: 13px; margin-top: 8px; display: inline-flex; gap: 6px; align-items: center; }
+  .viol { list-style: none; margin: 12px 0 0; padding: 0; }
+  .viol li { padding: 8px 0; border-top: 1px solid var(--rule); font-size: 13px; line-height: 1.5; }
+  .viol .sev { font-weight: 700; font-size: 11px; letter-spacing: .02em; text-transform: uppercase; margin-right: 6px; }
+  .sev.high { color: var(--critical-ink); } .sev.inter { color: var(--serious-ink); } .sev.basic { color: var(--muted); }
+  .viol .code { color: var(--muted); font-size: 11px; margin-left: 6px; }
+  .viol .flags { color: var(--ink-2); font-style: italic; }
+  .viol .txt { white-space: pre-line; }
+  .src { margin-top: 10px; font-size: 12px; }
+  .foot { margin-top: 40px; color: var(--muted); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--rule); padding-top: 12px; }
+  .status { padding: 40px 0; color: var(--muted); text-align: center; }
+  @media (max-width: 480px) {
+    .grid { grid-template-columns: 1fr; }
+    .hero h2 { font-size: 19px; }
+    section { scroll-margin-top: 230px; }
+  }
+</style>
+</head>
+<body>
+<div id="root"><div class="status">Loading…</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js" crossorigin></script>
+<script>
+(function () {
+  const { useState, useEffect, useMemo, useRef } = React;
+  const html = htm.bind(React.createElement);
+
+  // ── data helpers ──────────────────────────────────────────────────────────
+  const TIER_ORDER = ["closed", "shame", "redeemed", "fame", "neutral"];
+  const TIER_LABEL = { closed: "Closed", shame: "Wall of Shame", redeemed: "Redeemed", fame: "Wall of Fame", neutral: "Everyone else" };
+  const TILE_LABEL = { closed: "Closed", shame: "Shame", redeemed: "Redeemed", fame: "Fame", neutral: "Everyone else" };
+  const TIER_STATUS = { closed: "critical", shame: "serious", redeemed: "good", fame: "good", neutral: "plain" };
+  const TIER_ICON = { closed: "⛔", shame: "▲", redeemed: "✓", fame: "★", neutral: "·" };
+  const CURRENT_YEAR = String(new Date().getFullYear());
+
+  const fmtDate = (s) => {
+    if (!s) return "";
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  };
+  // DBPR shouts everything in capitals. Sentence-case it, but keep abbreviations
+  // (AMC, US, NE, A1A) and ordinals (II) that would otherwise come out as words.
+  const KEEP_UPPER = new Set(["US","USA","FL","NE","NW","SE","SW","AMC","AJ","BBQ","LLC","INC","DBA","KFC","IHOP","CVS",
+    "TGI","II","III","IV","JR","SR","TCBY","BJ'S","DQ","PDQ","YMCA","VFW","IRC","LA","NY","UK","RV","GC","CC","OG","MGM"]);
+  const titleCase = (s) => (s || "").split(/(\s+)/).map((w) => {
+    if (!w.trim()) return w;
+    const u = w.toUpperCase();
+    if (KEEP_UPPER.has(u) || /\d/.test(u)) return u;
+    if (/^[^AEIOUY']{2,3}$/.test(u)) return u;                   // no vowels: an initialism
+    return u.charAt(0) + u.slice(1).toLowerCase();
+  }).join("").replace(/'S\b/g, "'s").replace(/(^|[\s(\/-])([a-z])/g, (m, a, b) => a + b.toUpperCase())
+    .replace(/\bMc([a-z])/g, (m, c) => "Mc" + c.toUpperCase());
+  const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ");
+
+  function useHash() {
+    const [hash, setHash] = useState(location.hash);
+    useEffect(() => {
+      const on = () => setHash(location.hash);
+      addEventListener("hashchange", on);
+      return () => removeEventListener("hashchange", on);
+    }, []);
+    return hash;
+  }
+
+  // ── small pieces ──────────────────────────────────────────────────────────
+  const Badge = ({ kind, icon, children, title }) =>
+    html`<span class="b ${kind}" title=${title}><span aria-hidden="true">${icon}</span>${children}</span>`;
+
+  function badgesFor(t, est) {
+    const out = [];
+    if (!t) return out;
+    if (t.tier === "closed") {
+      out.push(html`<${Badge} key="c" kind="critical" icon="⛔">Closed by emergency order<//>`);
+      if (t.reopened) out.push(html`<${Badge} key="r" kind="plain" icon="↻">Reopened<//>`);
+    }
+    if (t.tier === "shame" || t.tier === "redeemed") {
+      out.push(html`<${Badge} key="s" kind="serious" icon="▲">${t.max_high_priority} high-priority<//>`);
+      if (t.repeat_shame) out.push(html`<${Badge} key="rp" kind="warning" icon="×${t.shame_count}">Repeat<//>`);
+    }
+    if (t.tier === "redeemed") out.push(html`<${Badge} key="rd" kind="good" icon="✓">Redeemed — later inspection clean<//>`);
+    if (t.tier === "fame") out.push(html`<${Badge} key="f" kind="good" icon="★">${t.clean_streak} clean routine ${t.clean_streak === 1 ? "inspection" : "in a row"}<//>`);
+    if (est && est.previously_at_address && est.previously_at_address.length)
+      out.push(html`<${Badge} key="p" kind="plain" icon="⌂" title="A different licence operated at this address">Previously another licence here<//>`);
+    if (est && est.active_license === false)
+      out.push(html`<${Badge} key="x" kind="plain" icon="—">Licence no longer active<//>`);
+    return out;
+  }
+
+  const Counts = ({ v }) => {
+    const mx = Math.max(1, v.high + v.intermediate + v.basic, 10);
+    const w = (n) => `${Math.round((n / mx) * 90)}px`;
+    if (v.total === 0) return html`<div class="clean"><span aria-hidden="true">✓</span> No violations found</div>`;
+    return html`<div class="counts" aria-label="Violation counts">
+      <span><i class="bar h" style=${{ width: w(v.high) }}></i><b>${v.high}</b> high priority</span>
+      <span><i class="bar i" style=${{ width: w(v.intermediate) }}></i><b>${v.intermediate}</b> intermediate</span>
+      <span><i class="bar b" style=${{ width: w(v.basic) }}></i><b>${v.basic}</b> basic</span>
+    </div>`;
+  };
+
+  // ── list view ─────────────────────────────────────────────────────────────
+  function Card({ est, t, onOpen }) {
+    const l = est.latest;
+    return html`<button class="card ${t.tier}" onClick=${() => onOpen(est.license_number)}>
+      <div class="name">${titleCase(est.name)}</div>
+      <div class="where">${titleCase(est.address)} · ${titleCase(est.city)}</div>
+      <div class="badges">${badgesFor(t, est)}</div>
+      ${t.tier === "closed" && t.closures && t.closures[0] ? html`<div class="latest">
+        <b>${t.closures[0].condition || "Emergency order"}</b> · closed ${fmtDate(t.closures[0].closed_date)}${t.closures[0].reopen_date ? `, reopened ${fmtDate(t.closures[0].reopen_date)}` : ""}
+      </div>` : null}
+      ${l ? html`<div class="latest">Latest: ${fmtDate(l.date)} · ${l.type} · ${l.total === 0 ? html`<b>no violations</b>` : html`<b>${l.high} high</b>, ${l.intermediate} intermediate, ${l.basic} basic`}</div>` : null}
+    </button>`;
+  }
+
+  function Section({ tier, items, tiers, onOpen, why, initial = 24 }) {
+    const [all, setAll] = useState(false);
+    const shown = all ? items : items.slice(0, initial);
+    return html`<section id=${"tier-" + tier}>
+      <div class="sh">
+        <h2><span class="dot" style=${{ background: `var(--${TIER_STATUS[tier] === "plain" ? "rule-2" : TIER_STATUS[tier]})` }}></span> ${TIER_LABEL[tier]}</h2>
+        <span class="n">${items.length}</span>
+        ${why ? html`<span class="why">${why}</span>` : null}
+      </div>
+      ${items.length ? html`<div class="grid">${shown.map((e) => html`<${Card} key=${e.license_number} est=${e} t=${tiers[e.license_number]} onOpen=${onOpen} />`)}</div>`
+                     : html`<div class="empty">Nobody here${tier === "closed" ? " — no emergency closures in this period" : ""}.</div>`}
+      ${items.length > shown.length ? html`<div class="more"><button class="link" onClick=${() => setAll(true)}>Show all ${items.length}</button></div>` : null}
+    </section>`;
+  }
+
+  function ListView({ data, view, setView, q, setQ, onOpen }) {
+    const tiers = data.views[view].tiers;
+    const counts = data.views[view].counts;
+    const byLic = useMemo(() => Object.fromEntries(data.establishments.map((e) => [e.license_number, e])), [data]);
+
+    const groups = useMemo(() => {
+      const nq = norm(q).trim();
+      const g = { closed: [], shame: [], redeemed: [], fame: [], neutral: [] };
+      for (const lic in tiers) {
+        const e = byLic[lic]; if (!e) continue;
+        if (nq && !(norm(e.name).includes(nq) || norm(e.address).includes(nq) || norm(e.city).includes(nq) || lic.includes(nq))) continue;
+        g[tiers[lic].tier].push(e);
+      }
+      const T = (lic) => tiers[lic];
+      g.closed.sort((a, b) => (T(b.license_number).closures[0]?.closed_date || T(b.license_number).last_visit || "").localeCompare(T(a.license_number).closures[0]?.closed_date || T(a.license_number).last_visit || ""));
+      g.shame.sort((a, b) => T(b.license_number).max_high_priority - T(a.license_number).max_high_priority || a.name.localeCompare(b.name));
+      g.redeemed.sort((a, b) => a.name.localeCompare(b.name));
+      g.fame.sort((a, b) => T(b.license_number).clean_streak - T(a.license_number).clean_streak || a.name.localeCompare(b.name));
+      g.neutral.sort((a, b) => a.name.localeCompare(b.name));
+      return g;
+    }, [tiers, byLic, q]);
+
+    const jump = (tier) => document.getElementById("tier-" + (tier === "redeemed" ? "shame" : tier))?.scrollIntoView({ behavior: "smooth" });
+    const period = view === "all" ? `since ${fmtDate(data.date_range.first_inspection)}` : `calendar ${view}`;
+
+    return html`<div>
+      <div class="top"><div class="wrap">
+        <div class="brand"><h1>Indian River restaurant inspections</h1><span class="sub">Florida DBPR public records · updated ${fmtDate(data.generated_at.slice(0, 10))}</span></div>
+        <div class="controls">
+          <div class="seg" role="group" aria-label="Time period">
+            <button aria-pressed=${view !== "all"} onClick=${() => setView(CURRENT_YEAR in data.views ? CURRENT_YEAR : Object.keys(data.views).find((k) => k !== "all"))}>${CURRENT_YEAR in data.views ? CURRENT_YEAR : Object.keys(data.views).find((k) => k !== "all")}</button>
+            <button aria-pressed=${view === "all"} onClick=${() => setView("all")}>All time</button>
+          </div>
+          <div class="search"><input type="search" placeholder="Search by name, street or city" value=${q} onInput=${(e) => setQ(e.target.value)} aria-label="Search establishments" /></div>
+        </div>
+        <div class="tiles">
+          ${["closed", "shame", "redeemed", "fame", "neutral"].map((t) => html`<button key=${t} class="tile" onClick=${() => jump(t)}>
+            <div class="lab"><span class="dot" style=${{ background: `var(--${TIER_STATUS[t] === "plain" ? "rule-2" : TIER_STATUS[t]})` }}></span>${TILE_LABEL[t]}</div>
+            <div class="val">${counts[t] || 0}</div>
+          </button>`)}
+        </div>
+      </div></div>
+
+      <div class="wrap">
+        <${Section} tier="closed" items=${groups.closed} tiers=${tiers} onOpen=${onOpen}
+          why=${`Shut by a DBPR emergency order in ${period}, for conditions like pests or sewage. "Reopened" means a follow-up inspection cleared the order.`} />
+        <${Section} tier="shame" items=${[...groups.shame, ...groups.redeemed]} tiers=${tiers} onOpen=${onOpen}
+          why=${`At least one inspection with ${data.shame_threshold_high_priority} or more high-priority violations — the kind that can directly cause foodborne illness. ` +
+               `Those marked Redeemed have since passed an inspection with zero violations; open the card to see it.`} />
+        <${Section} tier="fame" items=${groups.fame} tiers=${tiers} onOpen=${onOpen}
+          why="Most recent routine inspection found nothing at all, and nothing serious on record in this period." />
+        <${Section} tier="neutral" items=${groups.neutral} tiers=${tiers} onOpen=${onOpen} initial=${30}
+          why="Inspected in this period with the ordinary run of minor findings." />
+        <div class="foot">Source: Florida Department of Business &amp; Professional Regulation, Division of Hotels &amp; Restaurants — public inspection extracts for county 41.
+          Each report is a snapshot of conditions at the time of inspection. Establishments are tracked by licence number; a new owner at the same address starts a fresh record.
+          Data covers ${fmtDate(data.date_range.first_inspection)} to ${fmtDate(data.date_range.last_inspection)}.</div>
+      </div>
+    </div>`;
+  }
+
+  // ── detail view ───────────────────────────────────────────────────────────
+  function DetailView({ lic, data, view, onBack }) {
+    const [d, setD] = useState(null);
+    const [err, setErr] = useState(null);
+    const t = data.views[view].tiers[lic] || data.views.all.tiers[lic];
+    const est = data.establishments.find((e) => e.license_number === lic);
+    const focusId = t && t.redemption_visit_id;
+
+    useEffect(() => {
+      let live = true;
+      setD(null); setErr(null);
+      fetch(`establishments/${lic}.json`, { cache: "no-cache" })
+        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then((j) => live && setD(j)).catch((e) => live && setErr(String(e)));
+      return () => { live = false; };
+    }, [lic]);
+
+    useEffect(() => { window.scrollTo(0, 0); }, [lic]);
+
+    if (!est) return html`<div class="wrap"><div class="back"><button class="link" onClick=${onBack}>← Back</button></div><div class="status">No establishment with licence ${lic}.</div></div>`;
+
+    return html`<div class="wrap">
+      <div class="back"><button class="link" onClick=${onBack}>← All establishments</button></div>
+      <div class="hero">
+        <h2>${titleCase(est.name)}</h2>
+        <div class="meta">${titleCase(est.address)}, ${titleCase(est.city)} ${est.zip}</div>
+        <div class="badges">${badgesFor(t, est)}</div>
+        <div class="facts">
+          <span>Licence <b>${est.license_display || est.license_number}</b></span>
+          ${est.seats ? html`<span>Seats <b>${est.seats}</b></span>` : null}
+          ${est.risk_level ? html`<span><b>${est.risk_level}</b></span>` : null}
+          ${d ? html`<span>Inspections on record <b>${d.inspections.length}</b></span>` : null}
+          ${est.previously_at_address && est.previously_at_address.length ? html`<span>Earlier licence at this address: ${est.previously_at_address.map((p, i) => html`<a key=${p} href=${"#/r/" + p}>${p}</a>${i < est.previously_at_address.length - 1 ? ", " : ""}`)}</span>` : null}
+        </div>
+        ${d && d.closures.map((c) => html`<div class="closure" key=${c.closed_date}>
+          <b>Emergency closure — ${c.condition || "condition not stated"}.</b> Ordered closed ${fmtDate(c.closed_date)}${c.reopen_date ? `; approved to reopen ${fmtDate(c.reopen_date)}` : "; not yet approved to reopen"}.
+        </div>`)}
+      </div>
+
+      ${err ? html`<div class="status">Couldn't load this establishment's history (${err}).</div>` : null}
+      ${!d && !err ? html`<div class="status">Loading history…</div>` : null}
+      ${d ? html`<div class="visits">
+        ${focusId ? html`<div class="empty">The inspection that earned the Redeemed badge is outlined below.</div>` : null}
+        ${d.inspections.map((v) => html`<${Visit} key=${v.visit_id} v=${v} hl=${v.visit_id === focusId} />`)}
+      </div>` : null}
+    </div>`;
+  }
+
+  function Visit({ v, hl }) {
+    const ref = useRef(null);
+    useEffect(() => { if (hl && ref.current) setTimeout(() => ref.current.scrollIntoView({ block: "center" }), 150); }, [hl]);
+    const emergency = /emergency/i.test(v.disposition || "");
+    const n = v.narrative;
+    const result = n && n.result ? n.result : v.disposition;
+    return html`<div class=${"visit" + (emergency ? " flag" : "") + (hl ? " hl" : "")} ref=${ref} id=${"v-" + v.visit_id}>
+      <div class="vh">
+        <span class="d">${fmtDate(v.date)}</span>
+        <span class="t">${v.type}</span>
+        <span class="r">${result}${emergency ? " — emergency order" : ""}</span>
+      </div>
+      <${Counts} v=${v} />
+      ${n && n.violations && n.violations.length ? html`<ul class="viol">
+        ${n.violations.map((x, i) => html`<li key=${i}>
+          <span class=${"sev " + (x.severity === "High Priority" ? "high" : x.severity === "Intermediate" ? "inter" : "basic")}>${x.severity || "Violation"}</span>
+          <span class="txt">${x.text}</span>
+          ${x.flags && x.flags.length ? html` <span class="flags">(${x.flags.join(", ")})</span>` : null}
+          <span class="code">${x.code}</span>
+        </li>`)}
+      </ul>` : (n && n.status === "unavailable" ? html`<div class="empty">Narrative unavailable — DBPR no longer serves this report.</div>`
+              : (!n && v.total > 0 ? html`<div class="empty">Inspector's notes not fetched yet.</div>` : null))}
+      ${v.detail_url ? html`<div class="src"><a href=${v.detail_url} target="_blank" rel="noopener">Official report on myfloridalicense.com ↗</a></div>` : null}
+    </div>`;
+  }
+
+  // ── app ───────────────────────────────────────────────────────────────────
+  function App() {
+    const [data, setData] = useState(null);
+    const [err, setErr] = useState(null);
+    const [view, setViewState] = useState(() => { try { return localStorage.getItem("irc-view") || null; } catch { return null; } });
+    const [q, setQ] = useState("");
+    const hash = useHash();
+
+    useEffect(() => {
+      fetch("data.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(setData).catch((e) => setErr(String(e)));
+    }, []);
+
+    const setView = (v) => { setViewState(v); try { localStorage.setItem("irc-view", v); } catch {} };
+
+    if (err) return html`<div class="status">Couldn't load the data (${err}). Try again in a moment.</div>`;
+    if (!data) return html`<div class="status">Loading…</div>`;
+    const v = view && data.views[view] ? view : (CURRENT_YEAR in data.views ? CURRENT_YEAR : Object.keys(data.views)[0]);
+
+    const m = hash.match(/^#\/r\/(\d+)/);
+    if (m) return html`<${DetailView} lic=${m[1]} data=${data} view=${v} onBack=${() => { history.length > 1 ? history.back() : (location.hash = "#/"); }} />`;
+    return html`<${ListView} data=${data} view=${v} setView=${setView} q=${q} setQ=${setQ} onOpen=${(lic) => { location.hash = "#/r/" + lic; }} />`;
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(html`<${App} />`);
+})();
+</script>
+</body>
+</html>
