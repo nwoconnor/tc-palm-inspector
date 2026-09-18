@@ -20,6 +20,7 @@ and sends alerts when something serious happens.
 | `data/archive/` | Snapshot of each outgoing fiscal year's district file, taken around July 1. Committed. |
 | `data/raw/` | Raw downloads, ~56 MB. Not committed. |
 | `.github/workflows/daily.yml` | Schedules `daily.py` every morning and commits what changed. |
+| `.github/workflows/pages.yml` | Publishes `public/` to GitHub Pages whenever it changes. |
 
 ## Running it
 
@@ -127,10 +128,14 @@ years of history accumulate.
 
 ### Publishing on GitHub Pages
 
-Once, on the repo: **Settings → Pages → Build and deployment → Source: Deploy from
-a branch → Branch: `main`, folder `/public` → Save.** A minute later the site is at
-`https://<user>.github.io/tc-palm-inspector/`. Put that address in the
-`DASHBOARD_URL` repository variable so alert reports link to it.
+`.github/workflows/pages.yml` publishes `public/` to GitHub Pages on every push to
+`main` that touches it — so the daily bot commit also refreshes the site. GitHub's
+simpler "deploy from a branch" mode cannot serve a `public/` folder (only the root
+or `/docs`), which is why this is a workflow.
+
+Once, on the repo: **Settings → Pages → Build and deployment → Source: GitHub
+Actions.** The site is then at `https://<user>.github.io/tc-palm-inspector/`; put
+that address in the `DASHBOARD_URL` repository variable so alert reports link to it.
 
 ## The daily job
 
