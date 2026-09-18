@@ -1,0 +1,20 @@
+# Raw DBPR downloads: ~56 MB and re-fetchable, so not worth committing.
+data/raw/
+
+# Generated preview of the alert email, and scraper logs.
+data/report_preview.html
+data/*.log
+
+# The SQLite DB and public/data.json ARE committed on purpose (the brief asks for it).
+!data/inspections.db
+!public/data.json
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# Regenerated on every run; the numbers live in the chat/report, not the repo.
+data/phase1_summary.txt
+
+# The original hand-off bundle; its two files are already extracted at the root.
+files.zip
