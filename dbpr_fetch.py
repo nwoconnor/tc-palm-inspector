@@ -71,7 +71,8 @@ RAW_DIR = DATA_DIR / "raw"
 PUBLIC_DIR = Path("public")
 DB_PATH = DATA_DIR / "inspections.db"
 SUMMARY_PATH = DATA_DIR / "phase1_summary.txt"
-JSON_PATH = PUBLIC_DIR / "data.json"
+JSON_PATH = PUBLIC_DIR / "data.json"                 # the index the dashboard loads first
+DETAIL_DIR = PUBLIC_DIR / "establishments"           # one file per licence, loaded on demand
 
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
@@ -147,6 +148,16 @@ def log(msg=""):
 def norm(s):
     """Lowercase, collapse whitespace -- for header matching."""
     return re.sub(r"\s+", " ", str(s or "").strip().lower())
+
+
+CITY_FIXES = {"Vero Bch": "Vero Beach", "Vero Beach Fl": "Vero Beach", "Sebastian Fl": "Sebastian"}
+
+
+def clean_city(v):
+    """DBPR abbreviates some cities ('VERO BCH'); use the real name so the same
+    town does not appear twice in searches and cards."""
+    c = str(v or "").strip().title()
+    return CITY_FIXES.get(c, c)
 
 
 def normalize_license(v):
@@ -306,7 +317,7 @@ def rows_to_inspections(rows, source):
             "license_type": str(r[cols["license_type"]]).strip(),
             "name": str(r[cols["name"]]).strip(),
             "address": str(r[cols["address"]]).strip(),
-            "city": str(r[cols["city"]]).strip().title(),
+            "city": clean_city(r[cols["city"]]),
             "zip": str(r[cols["zip"]]).strip(),
             "inspection_number": str(r[cols["inspection_number"]]).strip(),
             "visit_number": to_int(r[cols["visit_number"]]),
@@ -495,7 +506,7 @@ def load_licenses(conn, body):
             name=COALESCE(NULLIF(establishments.name,''), excluded.name),
             address=COALESCE(NULLIF(establishments.address,''), excluded.address)
         """, (lic, str(r[cols["license_number"]]).strip(), est_name,
-              str(r[cols["address"]]).strip(), str(r[cols["city"]]).strip().title(),
+              str(r[cols["address"]]).strip(), clean_city(r[cols["city"]]),
               str(r[cols["zip"]]).strip(), to_int(r[cols["seats"]]),
               str(r[cols["risk_level"]]).strip(), str(r[cols["status"]]).strip(),
               parse_date(r[cols["last_inspection"]])))
@@ -727,9 +738,20 @@ def previous_tenants(conn):
 # JSON EXPORT
 # ─────────────────────────────────────────────
 def export_json(conn, views):
+    """Write the dashboard's data.
+
+    Two layers, so the page stays fast as history grows: public/data.json is a
+    small index (every establishment, its tier in each view, and a one-line
+    summary of its latest inspection) and public/establishments/<licence>.json
+    holds that establishment's full inspection history with narratives, fetched
+    only when someone opens its card. Detail files carry no timestamp, so a
+    daily re-export only changes the ones whose data actually changed.
+    """
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
+    DETAIL_DIR.mkdir(parents=True, exist_ok=True)
     prev = previous_tenants(conn)
     ests = []
+    written = set()
     for row in conn.execute("""
           SELECT license_number, license_display, license_id, name, address, city, zip,
                  license_type, seats, risk_level, status, last_inspection_date, in_license_file
@@ -758,14 +780,28 @@ def export_json(conn, views):
                for c in conn.execute("""SELECT closed_date, reopen_date, condition, source
                                         FROM closures WHERE license_number=?
                                         ORDER BY closed_date DESC""", (lic,))]
-        ests.append({
+        for i in insp:
+            i["narrative"] = _narrative_for_export(i["narrative"])
+        base = {
             "license_number": lic, "license_display": disp, "license_id": lid,
             "name": name, "address": addr, "city": city, "zip": zp,
             "license_type": ltype, "seats": seats, "risk_level": risk, "status": status,
             "last_inspection_date": last_insp, "active_license": bool(in_lic),
             "previously_at_address": prev.get(lic, []),
-            "inspections": insp, "closures": cls,
-        })
+        }
+        detail = dict(base, inspections=insp, closures=cls)
+        (DETAIL_DIR / f"{lic}.json").write_text(json.dumps(detail, separators=(",", ":")))
+        written.add(f"{lic}.json")
+        latest = insp[0] if insp else None
+        ests.append(dict(base, inspection_count=len(insp), closure_count=len(cls),
+                         latest={k: latest[k] for k in ("date", "type", "disposition", "total",
+                                                        "high", "intermediate", "basic")}
+                         if latest else None))
+
+    # Drop detail files for licences that no longer exist in the database.
+    for stale in DETAIL_DIR.glob("*.json"):
+        if stale.name not in written:
+            stale.unlink()
 
     dr = conn.execute("SELECT MIN(inspection_date), MAX(inspection_date) FROM inspections").fetchone()
     payload = {
@@ -777,9 +813,24 @@ def export_json(conn, views):
         "views": views,
         "establishments": ests,
     }
-    JSON_PATH.write_text(json.dumps(payload, indent=1))
+    JSON_PATH.write_text(json.dumps(payload, separators=(",", ":")))
     kb = JSON_PATH.stat().st_size / 1024
-    log(f"\n  wrote {JSON_PATH} ({kb:,.0f} KB, {len(ests)} establishments)")
+    dkb = sum(f.stat().st_size for f in DETAIL_DIR.glob("*.json")) / 1024
+    log(f"\n  wrote {JSON_PATH} ({kb:,.0f} KB index) + {len(written)} detail files "
+        f"in {DETAIL_DIR}/ ({dkb:,.0f} KB)")
+
+
+def _narrative_for_export(raw):
+    """Stored narratives are JSON text; hand the dashboard the parsed object, minus
+    bookkeeping it does not need."""
+    if not raw:
+        return None
+    try:
+        rec = json.loads(raw)
+    except ValueError:
+        return None
+    return {"status": rec.get("status"), "result": rec.get("result"),
+            "violations": rec.get("violations", [])}
 
 
 # ─────────────────────────────────────────────

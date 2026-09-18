@@ -14,7 +14,9 @@ and sends alerts when something serious happens.
 | `alerts.py` | Works out what is worth telling someone about, and remembers what has already been sent. |
 | `delivery.py` | Renders the HTML report and sends it to Slack and/or email. |
 | `data/inspections.db` | SQLite store. Committed on purpose. |
-| `public/data.json` | What the dashboard reads. Committed on purpose. |
+| `public/index.html` | The dashboard: one static page, React loaded from a CDN, no build step. Served by GitHub Pages. |
+| `public/data.json` | The dashboard's index: every establishment, its tier in each view, latest-inspection summary. ~45 KB compressed. |
+| `public/establishments/` | One file per licence with full inspection history and narratives, loaded when a card is opened. |
 | `data/archive/` | Snapshot of each outgoing fiscal year's district file, taken around July 1. Committed. |
 | `data/raw/` | Raw downloads, ~56 MB. Not committed. |
 | `.github/workflows/daily.yml` | Schedules `daily.py` every morning and commits what changed. |
@@ -97,6 +99,38 @@ found rather than just a violation count.
 There are two parsers. The structured one walks the detail table row by row; if DBPR
 changes that markup, a flattened-text parser takes over. Both were checked against
 the extract's own violation counts and agreed on every page tested.
+
+## The dashboard
+
+`public/index.html` is the whole site. It is plain HTML that loads React and a tiny
+templating helper from a CDN, so there is nothing to build or install: GitHub Pages
+serves the `public/` folder as-is, and every bot commit updates the live site.
+
+- **2026 / All time** toggle with the tier counts as tiles (click one to jump to it).
+- Sections in order: **Closed**, **Wall of Shame** (Redeemed shown inside it with a
+  green badge), **Wall of Fame**, **Everyone else**. Search filters all of them.
+- A card opens the establishment's full history: closures with their condition and
+  reopen date, every inspection with its violation counts, the inspector's
+  observations, and a link to the official report. The Redeemed badge's clean
+  inspection is outlined.
+- Works at phone width and in dark mode; the chosen time period is remembered.
+
+To look at it locally:
+
+```bash
+python3 -m http.server 8765 --directory public
+```
+
+then open http://localhost:8765. The page loads `data.json` first (about 45 KB
+compressed) and one small file per establishment on demand, so it stays quick as
+years of history accumulate.
+
+### Publishing on GitHub Pages
+
+Once, on the repo: **Settings → Pages → Build and deployment → Source: Deploy from
+a branch → Branch: `main`, folder `/public` → Save.** A minute later the site is at
+`https://<user>.github.io/tc-palm-inspector/`. Put that address in the
+`DASHBOARD_URL` repository variable so alert reports link to it.
 
 ## The daily job
 
