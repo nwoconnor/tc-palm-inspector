@@ -45,7 +45,7 @@ import delivery
 import scrape_narratives as scraper
 
 ARCHIVE_DIR = Path("data") / "archive"
-DEFAULT_SCRAPE_LIMIT = 150          # ~3 minutes at the scraper's pacing
+DEFAULT_SCRAPE_LIMIT = 400          # ~8 minutes at the scraper's pacing; keeps chipping at the backlog
 EOS_WEEKS_TO_CHECK = 4              # Sundays to look back for closure files
 
 

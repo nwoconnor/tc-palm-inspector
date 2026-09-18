@@ -44,6 +44,20 @@ EXPECTED_DISTRICT = 4
 SHAME_HIGH_PRIORITY_MIN = 5
 CURRENT_YEAR = 2026
 
+# The tracker only ever holds the most recent HISTORY_YEARS of data. Nothing older
+# is pulled from DBPR, by decision -- see backfill.py and README.
+HISTORY_YEARS = 2
+
+
+def history_cutoff():
+    """ISO date: today minus HISTORY_YEARS. Rows before this are never loaded."""
+    t = date.today()
+    try:
+        return t.replace(year=t.year - HISTORY_YEARS).isoformat()
+    except ValueError:                      # 29 Feb
+        return t.replace(year=t.year - HISTORY_YEARS, day=28).isoformat()
+
+
 # Only these inspection types can put an establishment on the Wall of Fame.
 # "Food-Licensing Inspection" is a pre-opening paperwork check, not a hygiene
 # inspection, and a brand-new restaurant that has never been inspected for food
@@ -94,28 +108,34 @@ POS = {
 # Fields that live after the extra XLSX column and therefore move with the offset.
 SHIFTING_FIELDS = ("pda", "viol_start", "viol_end", "license_id", "visit_id")
 
-# Header-name hints, matched as substrings against the real DBPR header row.
+# Header-name hints. DBPR has used two vocabularies: long names ("Inspection Visit
+# ID") in the district CSVs and FY2025-26, and abbreviations ("INSP_VST_ID") in the
+# FY2023-24 / FY2024-25 files. Hints are tried in order, most specific first, so a
+# generic word can never grab an earlier column that merely contains it.
 HEADER_HINTS = {
-    "county_code": ["county number", "county code", "countynumber"],
-    "county_name": ["county name", "countyname"],
-    "license_type": ["license type"],
-    "license_number": ["license number", "licensenumber", "license num"],
-    "name": ["business name", "dba", "location name"],
-    "address": ["location address", "address"],
-    "city": ["location city", "city"],
-    "zip": ["zip"],
-    "inspection_number": ["inspection number"],
-    "visit_number": ["visit number"],
-    "inspection_class": ["inspection class"],
-    "inspection_type": ["inspection type"],
+    "county_code": ["county number", "county code", "countycode", "countynumber"],
+    "county_name": ["county name", "cnty_desc", "countyname"],
+    "license_type": ["license type", "profession"],
+    "license_number": ["license number", "license_no", "licensenumber", "license num"],
+    "name": ["business name", "dba_name", "dba", "location name"],
+    "address": ["location address", "loc_address", "address"],
+    "city": ["location city", "loc_city", "city"],
+    "zip": ["location zip", "loc_zip", "zip"],
+    "inspection_number": ["inspection number", "insp_no"],
+    "visit_number": ["visit number", "visit_no"],
+    "inspection_class": ["inspection class", "inspclass"],
+    "inspection_type": ["inspection type", "insptype"],
     "disposition": ["disposition"],
-    "inspection_date": ["inspection date"],
-    "total_violations": ["total violations"],
-    "high_priority": ["high priority"],
-    "intermediate": ["intermediate"],
+    "inspection_date": ["inspection date", "insp_date"],
+    "total_violations": ["total violations", "violations"],
+    "high_priority": ["high priority", "high_viol"],
+    "intermediate": ["intermediate", "intermed"],
     "basic": ["basic"],
-    "license_id": ["license id", "licenseid"],
-    "visit_id": ["visit id", "inspection visit id", "inspvisitid"],
+    "pda": ["pda status", "pda"],
+    "viol_start": ["violation 01", "v_01"],
+    "viol_end": ["violation 58", "v_58"],
+    "license_id": ["license id", "licenseid", "lic_id"],
+    "visit_id": ["inspection visit id", "visit id", "insp_vst_id", "inspvisitid"],
 }
 
 # Column names in the District license file (hrfood{d}.csv). That file is 35 columns
@@ -268,11 +288,21 @@ def resolve_columns(header, data_width):
         lowered = [norm(h) for h in header]
         matched = 0
         for field, hints in HEADER_HINTS.items():
-            for i, h in enumerate(lowered):
-                if h and any(hint in h for hint in hints):
-                    cols[field] = i
-                    matched += 1
+            hit = None
+            # Exact name first, then substring -- and hints in the order given.
+            for exact in (True, False):
+                for hint in hints:
+                    for i, h in enumerate(lowered):
+                        if h and ((h == hint) if exact else (hint in h)):
+                            hit = i
+                            break
+                    if hit is not None:
+                        break
+                if hit is not None:
                     break
+            if hit is not None:
+                cols[field] = hit
+                matched += 1
         named_width = max((i for i, h in enumerate(lowered) if h), default=-1) + 1
         offset = max(0, data_width - named_width)
         if offset:
@@ -336,12 +366,12 @@ def rows_to_inspections(rows, source):
     # Sanity check: visit_id must be unique per row, or the trailing block is misaligned.
     ids = [o["visit_id"] for o in out]
     uniq = len(set(ids))
-    if out and uniq < len(ids):
-        log(f"  !! {source}: visit_id is not unique ({uniq} distinct / {len(ids)} rows) "
-            f"-- trailing columns are probably misaligned")
     blank = sum(1 for i in ids if not i)
-    if blank:
-        log(f"  !! {source}: {blank} rows have a blank visit_id")
+    if out and (uniq < len(ids) or blank):
+        # Duplicate or blank visit ids mean the trailing columns are misaligned and
+        # every row would be wrong. Refuse rather than load garbage.
+        raise ValueError(f"{source}: visit_id is not unique ({uniq} distinct / {len(ids)} rows, "
+                         f"{blank} blank) -- column mapping is wrong for this file; not loading")
     log(f"  counties present in {source}: "
         + ", ".join(f"{k} {v}" for k, v in sorted(seen_counties.items())[:12])
         + (" ..." if len(seen_counties) > 12 else ""))
@@ -518,7 +548,7 @@ IRC_CITIES = {"vero beach", "vero bch", "sebastian", "fellsmere", "wabasso", "ro
               "orchid", "indian river shores", "gifford", "winter beach"}
 
 
-def load_closures(conn, body, source, irc_licenses):
+def load_closures(conn, body, source, irc_licenses, since=None):
     rows = xlsx_rows(body)
     if not rows:
         return 0
@@ -547,6 +577,8 @@ def load_closures(conn, body, source, irc_licenses):
         lic = normalize_license(r[c_lic])
         city = norm(r[c_city]) if c_city is not None else ""
         if lic not in irc_licenses and city not in IRC_CITIES:
+            continue
+        if since and (parse_date(r[c_date]) or "") < since:
             continue
         conn.execute("""
           INSERT OR REPLACE INTO closures (license_number, closed_date, name, address, city, condition,

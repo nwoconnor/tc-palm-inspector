@@ -17,6 +17,7 @@ and sends alerts when something serious happens.
 | `public/index.html` | The dashboard: one static page, React loaded from a CDN, no build step. Served by GitHub Pages. |
 | `public/data.json` | The dashboard's index: every establishment, its tier in each view, latest-inspection summary. ~45 KB compressed. |
 | `public/establishments/` | One file per licence with full inspection history and narratives, loaded when a card is opened. |
+| `backfill.py` | One-off history load: fiscal years 2016-17 onward and the closure archives back to 2015. |
 | `data/archive/` | Snapshot of each outgoing fiscal year's district file, taken around July 1. Committed. |
 | `data/raw/` | Raw downloads, ~56 MB. Not committed. |
 | `.github/workflows/daily.yml` | Schedules `daily.py` every morning and commits what changed. |
@@ -137,6 +138,41 @@ Once, on the repo: **Settings → Pages → Build and deployment → Source: Git
 Actions.** The site is then at `https://<user>.github.io/tc-palm-inspector/`; put
 that address in the `DASHBOARD_URL` repository variable so alert reports link to it.
 
+## History (Phase 5)
+
+The tracker holds the **most recent two years** and never pulls anything older
+(`HISTORY_YEARS` in `dbpr_fetch.py`). DBPR does publish inspection files back to
+2016, in four different places and formats, all linked from the public-records
+page; `backfill.py` knows all of them but only loads the ones inside the window:
+
+| Years | Format | Where |
+|---|---|---|
+| FY2023-24 onward | statewide `.xlsx` | `/hr/inspections/fdinspi_YYYY.xlsx` |
+| FY2021-22, 2022-23 | statewide `.xlsx` | `/sto/file_download/hr/fdinspi_YYYY.xlsx` |
+| FY2019-20 | per-district legacy `.xls` | `/sto/file_download/extracts/4fdinspi_1920.xls` (needs `xlrd`) |
+| FY2016-17 to 2020-21 | per-district `.csv`, no header row | `/sto/file_download/hr/4fdinspi_YYYY.csv` |
+
+Two header vocabularies exist — long names (`Inspection Visit ID`) and
+abbreviations (`INSP_VST_ID`) — and FY2025-26's header is stale (82 names over 83
+columns). The mapper knows both, detects the stale case, and **refuses to load any
+file whose visit IDs do not come out unique**, because that is the signature of a
+misaligned column and every row would be wrong.
+
+Closures: `/hr/inspections/documents/{year}-EOS.zip` bundles a year of weekly
+extracts. The year in the name does not match the dates inside (2025-EOS.zip holds
+2024), so every spreadsheet in every zip is loaded and the row dates are trusted.
+This is what gives pre-2026 closures their condition text.
+
+```bash
+python3 backfill.py              # everything not yet loaded (safe to re-run)
+python3 backfill.py --cached     # reuse the ~400 MB already in data/raw
+python3 backfill.py --closures-only
+python3 scrape_narratives.py --all   # then the narratives, newest first
+```
+
+The daily job fetches up to 400 narratives a run, so it works through any backlog
+on its own at roughly a year of history every three days.
+
 ## The daily job
 
 `daily.py` is what GitHub Actions runs each morning. It is deliberately cheap when
@@ -147,8 +183,8 @@ nothing has happened:
    have not seen. If nothing moved, it stops — no download, no rebuild, no commit.
 2. **Download and confirm.** Anything that looks changed is downloaded and its SHA-256
    compared with the last run, so a touched-but-identical file is still skipped.
-3. **Ingest, narratives, alerts, export.** New rows go into the database, up to 150
-   new inspections get their narratives (about three minutes), alerts are detected and
+3. **Ingest, narratives, alerts, export.** New rows go into the database, up to 400
+   inspections without narratives get them (about eight minutes), alerts are detected and
    sent, and `public/data.json` is rewritten. Export happens *before* sending, so a
    delivery failure never costs the data.
 4. **Fiscal-year archive.** Between June 24 and July 7, the outgoing year's district
