@@ -130,7 +130,9 @@ years of history accumulate.
 ### Publishing on GitHub Pages
 
 `.github/workflows/pages.yml` publishes `public/` to GitHub Pages on every push to
-`main` that touches it — so the daily bot commit also refreshes the site. GitHub's
+`main` that touches it. The daily job starts it explicitly after its own data
+commit, because GitHub never lets a workflow's automatic push trigger another
+workflow — without that step the site would silently stop updating. GitHub's
 simpler "deploy from a branch" mode cannot serve a `public/` folder (only the root
 or `/docs`), which is why this is a workflow.
 

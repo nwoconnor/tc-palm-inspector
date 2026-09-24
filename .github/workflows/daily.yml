@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: write          # to start the Publish dashboard workflow after a data commit
 
 concurrency:
   group: daily-inspections
@@ -63,3 +64,12 @@ jobs:
             git commit -m "data: DBPR refresh $(date -u +%Y-%m-%d)"
             git push
           fi
+
+      # A push made by this workflow's token does not trigger other workflows (a
+      # GitHub rule that prevents loops), so the Pages deploy is started explicitly.
+      # Starting a workflow by dispatch is the one exception the rule allows.
+      - name: Publish dashboard
+        if: steps.daily.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main
