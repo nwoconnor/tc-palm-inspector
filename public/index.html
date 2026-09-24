@@ -222,6 +222,9 @@
   const TIER_STATUS = { closed: "critical", shame: "serious", redeemed: "good", fame: "good", neutral: "plain" };
   const TIER_ICON = { closed: "⛔", shame: "▲", redeemed: "✓", fame: "★", neutral: "·" };
   const CURRENT_YEAR = String(new Date().getFullYear());
+  // Worst first in the inspector's notes; unlabelled rows go after Basic.
+  const SEV_ORDER = { "High Priority": 0, "Intermediate": 1, "Basic": 2 };
+  const sevRank = (s) => SEV_ORDER[s] ?? 3;
 
   const fmtDate = (s) => {
     if (!s) return "";
@@ -557,7 +560,7 @@
       </div>
       <${Counts} v=${v} />
       ${n && n.violations && n.violations.length ? html`<ul class="viol">
-        ${n.violations.map((x, i) => html`<li key=${i}>
+        ${[...n.violations].sort((a, b) => sevRank(a.severity) - sevRank(b.severity)).map((x, i) => html`<li key=${i}>
           <span class=${"sev " + (x.severity === "High Priority" ? "high" : x.severity === "Intermediate" ? "inter" : "basic")}>${x.severity || "Violation"}</span>
           <span class="txt">${x.text}</span>
           ${x.flags && x.flags.length ? html` <span class="flags">(${x.flags.join(", ")})</span>` : null}
