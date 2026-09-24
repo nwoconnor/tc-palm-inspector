@@ -11,6 +11,8 @@ and sends alerts when something serious happens.
 | `dbpr_fetch.py` | Downloads the DBPR extracts, filters to county 41, loads `data/inspections.db`, computes tiers, writes `public/data.json`. |
 | `scrape_narratives.py` | Fetches the DBPR detail page for each inspection and stores the inspector's actual observations. |
 | `daily.py` | The daily job: change check, ingest, narratives, alerts, export. Run by GitHub Actions. |
+| `geocode.py` | Turns each establishment's address into a map position (see below). |
+| `data/geocode_overrides.csv` | Hand corrections for the rare address no geocoder can place. |
 | `alerts.py` | Works out what is worth telling someone about, and remembers what has already been sent. |
 | `delivery.py` | Renders the HTML report and sends it to Slack and/or email. |
 | `data/inspections.db` | SQLite store. Committed on purpose. |
@@ -111,6 +113,11 @@ serves the `public/` folder as-is, and every bot commit updates the live site.
 - **2026 / All time** toggle with the tier counts as tiles (click one to jump to it).
 - Sections in order: **Closed**, **Wall of Shame** (Redeemed shown inside it with a
   green badge), **Wall of Fame**, **Everyone else**. Search filters all of them.
+- The Wall of Shame opens with a **map**: one pin per place, orange for Shame and
+  green for Redeemed. Hover for a summary, click to open the history. It follows the
+  time-period toggle and the search box. Tiles are OpenStreetMap's (free, credited).
+- **Everyone else** is a scrollable, sortable table rather than cards: name,
+  address, city, latest inspection, and its violation counts.
 - A card opens the establishment's full history: closures with their condition and
   reopen date, every inspection with its violation counts, the inspector's
   observations, and a link to the official report. The Redeemed badge's clean
@@ -139,6 +146,38 @@ or `/docs`), which is why this is a workflow.
 Once, on the repo: **Settings → Pages → Build and deployment → Source: GitHub
 Actions.** The site is then at `https://<user>.github.io/tc-palm-inspector/`; put
 that address in the `DASHBOARD_URL` repository variable so alert reports link to it.
+
+## Map positions
+
+DBPR gives street addresses, not coordinates. `geocode.py` looks each address up
+once and stores latitude and longitude on the establishment; the daily job only
+looks up places it has not seen before, or whose address changed.
+
+Three passes, in order:
+
+1. The **US Census Bureau** batch geocoder, with the address as DBPR wrote it
+   (free, public, no account). Places about 90%.
+2. The Census again with a **cleaned address**: suite and unit numbers removed,
+   stray text dropped, highways spelled the way its map expects.
+3. **OpenStreetMap** for the rest, once with the city and once without (DBPR
+   sometimes records the wrong town), limited to the county and paced at one
+   request a second as its usage policy asks.
+
+A result outside Indian River County gets **no pin**. That is almost always a
+mobile food vendor licensed here but based elsewhere, and a pin in Clermont would
+mislead. A pin can sit a few doors from the building, because the Census places
+points along a street's address range; the map says so.
+
+When an address defeats all three (usually a misspelling in DBPR's own record),
+add a line to `data/geocode_overrides.csv`:
+
+```
+license_number,lat,lon,note
+4105338,27.648236,-80.377373,"DBPR spells it Royal Palm Point; placed on Royal Palm Pointe"
+```
+
+It is applied on the next run. `python3 geocode.py --retry` re-tries every
+address that has not been placed.
 
 ## History (Phase 5)
 

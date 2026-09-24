@@ -43,6 +43,7 @@ import dbpr_fetch as ingest
 import alerts as alerts_mod
 import delivery
 import scrape_narratives as scraper
+import geocode
 
 ARCHIVE_DIR = Path("data") / "archive"
 DEFAULT_SCRAPE_LIMIT = 400          # ~8 minutes at the scraper's pacing; keeps chipping at the backlog
@@ -240,6 +241,16 @@ def main():
     if not args.no_scrape:
         say(f"\n[4] Narratives (up to {args.scrape_limit} pages)")
         scraper.scrape(conn, limit=args.scrape_limit, verbose=False)
+
+    # ── 4b. Map positions for new establishments (a handful at most) ────────
+    try:
+        g = geocode.geocode(conn, verbose=False)
+        if g.get("looked_up"):
+            say(f"\n[4b] Map positions: {g['match']} placed, {g['no_match']} not found, "
+                f"{g['outside_county']} outside the county")
+    except Exception as e:
+        # A geocoder outage must never cost the day's data; they are retried tomorrow.
+        say(f"\n[4b] Map positions skipped: {type(e).__name__}: {e}")
 
     # ── 5. Alerts ────────────────────────────────────────────────────────────
     say("\n[5] Alerts")

@@ -449,6 +449,8 @@ def ensure_columns(conn):
     have = {r[1] for r in conn.execute("PRAGMA table_info(runs)")}
     if "last_modified" not in have:
         conn.execute("ALTER TABLE runs ADD COLUMN last_modified TEXT")
+    import geocode                      # map coordinates on establishments
+    geocode.ensure_columns(conn)
 
 
 def record_run(conn, run_at, fname, body, rows_kept):
@@ -781,7 +783,11 @@ def export_json(conn, views):
     """
     PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
     DETAIL_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_columns(conn)
     prev = previous_tenants(conn)
+    coords = {lic: (round(la, 5), round(lo, 5)) for lic, la, lo in conn.execute(
+        "SELECT license_number, lat, lon FROM establishments "
+        "WHERE geocode_status='match' AND lat IS NOT NULL")}
     ests = []
     written = set()
     for row in conn.execute("""
@@ -825,7 +831,9 @@ def export_json(conn, views):
         (DETAIL_DIR / f"{lic}.json").write_text(json.dumps(detail, separators=(",", ":")))
         written.add(f"{lic}.json")
         latest = insp[0] if insp else None
+        ll = coords.get(lic)
         ests.append(dict(base, inspection_count=len(insp), closure_count=len(cls),
+                         lat=ll[0] if ll else None, lon=ll[1] if ll else None,
                          latest={k: latest[k] for k in ("date", "type", "disposition", "total",
                                                         "high", "intermediate", "basic")}
                          if latest else None))

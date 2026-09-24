@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Indian River Inspections</title>
 <meta name="description" content="Restaurant inspection results for Indian River County, Florida, from the state's public DBPR records: emergency closures, the Wall of Shame, the Wall of Fame, and every establishment's full history.">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin>
 <style>
   :root {
     --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f0efec;
@@ -138,7 +139,64 @@
   .src { margin-top: 10px; font-size: 12px; }
   .foot { margin-top: 40px; color: var(--muted); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--rule); padding-top: 12px; }
   .status { padding: 40px 0; color: var(--muted); text-align: center; }
+
+  /* map */
+  /* isolation keeps Leaflet's high z-indexes inside the box, under the sticky header */
+  .mapbox { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden;
+            margin-bottom: 12px; box-shadow: var(--shadow); position: relative; isolation: isolate; }
+  .map { height: 340px; background: var(--surface-2); }
+  .maplegend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 8px 12px;
+               border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-2); }
+  .maplegend .k { display: inline-flex; align-items: center; gap: 6px; }
+  .maplegend .pin { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
+  .maplegend .note { color: var(--muted); flex-basis: 100%; }
+  .leaflet-container { font: inherit; }
+  .leaflet-tile-pane { filter: grayscale(.85) contrast(.92) brightness(1.03); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .leaflet-tile-pane { filter: grayscale(.9) invert(1) hue-rotate(180deg) brightness(.82) contrast(.88); }
+  }
+  :root[data-theme="dark"] .leaflet-tile-pane { filter: grayscale(.9) invert(1) hue-rotate(180deg) brightness(.82) contrast(.88); }
+  .leaflet-tooltip.tip { background: var(--surface); color: var(--ink); border: 1px solid var(--rule-2);
+                         border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.15); padding: 6px 9px; font-size: 12px; }
+  .leaflet-tooltip.tip::before { display: none; }
+  .tip b { display: block; font-size: 13px; }
+  .tip span { color: var(--ink-2); }
+  .leaflet-control-attribution { font-size: 10px; }
+  .leaflet-container .leaflet-control-attribution { background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--ink-2); }
+  .leaflet-container .leaflet-control-attribution a { color: var(--accent-ink); }
+  .leaflet-bar a, .leaflet-bar a:hover { background: var(--surface); color: var(--ink); border-bottom-color: var(--rule); }
+  .leaflet-bar { border-color: var(--rule-2) !important; }
+  @media (max-width: 480px) { .map { height: 280px; } }
+
+  /* everyone-else table */
+  .tablewrap { max-height: 520px; overflow: auto; border: 1px solid var(--rule); border-radius: 10px;
+               background: var(--surface); box-shadow: var(--shadow); }
+  table.list { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .list th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); text-align: left; font-weight: 600;
+             color: var(--ink-2); font-size: 12px; padding: 0; border-bottom: 1px solid var(--rule-2); white-space: nowrap; }
+  .list th button { border: 0; background: none; cursor: pointer; padding: 8px 10px; width: 100%; text-align: inherit;
+                    font-weight: inherit; color: inherit; font-size: inherit; }
+  .list th button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .list th.num, .list td.num { text-align: right; }
+  .list td { padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .list tbody tr:hover td { background: var(--surface-2); }
+  .list tbody tr:last-child td { border-bottom: 0; }
+  .list td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .list td a { color: var(--ink); font-weight: 600; text-decoration: none; }
+  .list td a:hover { color: var(--accent-ink); text-decoration: underline; }
+  .list .addr { color: var(--muted); font-size: 12px; }
+  .list .sub { color: var(--muted); font-size: 12px; }
+  .list .hp { color: var(--critical-ink); font-weight: 600; }
+  .list .zero { color: var(--muted); }
+  .tablenote { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .list .m-only { display: none; }
+  @media (max-width: 560px) {
+    .list .col-type, .list .col-city, .list .d-only { display: none; }
+    .list .m-only { display: inline; }
+    .list td, .list th button { padding-left: 8px; padding-right: 8px; }
+  }
   @media (max-width: 480px) {
+    .top { position: static; }        /* on phones the header would eat 40% of the screen */
     .grid { grid-template-columns: 1fr; }
     .hero h2 { font-size: 19px; }
     section { scroll-margin-top: 230px; }
@@ -151,6 +209,7 @@
 <script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js" crossorigin></script>
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
 <script>
 (function () {
   const { useState, useEffect, useMemo, useRef } = React;
@@ -228,6 +287,122 @@
     </div>`;
   };
 
+  // ── map ───────────────────────────────────────────────────────────────────
+  const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  // OpenStreetMap's own tiles: free, no key, attribution required. Muted by CSS so
+  // the pins carry the colour; inverted in dark mode (see .leaflet-tile-pane).
+  const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const ATTRIB = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+  function ShameMap({ items, tiers, onOpen }) {
+    const el = useRef(null);
+    const st = useRef({});
+    const pins = items.filter((e) => e.lat != null && e.lon != null);
+    const missing = items.filter((e) => e.lat == null || e.lon == null);
+    const hasRedeemed = items.some((e) => tiers[e.license_number].tier === "redeemed");
+
+    useEffect(() => {                                    // create once
+      if (!window.L || !el.current) return;
+      const map = L.map(el.current, { scrollWheelZoom: false, zoomControl: true, attributionControl: true,
+                                      preferCanvas: true });
+      const renderer = L.canvas({ padding: 0.5, tolerance: 8 });   // hit area wider than the dot
+      L.tileLayer(TILE_URL, { attribution: ATTRIB, maxZoom: 19 }).addTo(map);
+      st.current = { map, renderer, layer: L.layerGroup().addTo(map) };
+      // Pin rings use the surface colour, so repaint them if the theme flips.
+      const repaint = () => { if (st.current.draw) st.current.draw(); };
+      const mq = matchMedia("(prefers-color-scheme: dark)");
+      mq.addEventListener("change", repaint);
+      map.setView([27.66, -80.45], 11);
+      return () => { mq.removeEventListener("change", repaint); map.remove(); };
+    }, []);
+
+    useEffect(() => {                                    // (re)draw when the list changes
+      const s = st.current;
+      if (!s.map) return;
+      s.draw = () => {
+        s.layer.clearLayers();
+        const ring = cssVar("--surface");
+        // Worst drawn last so it sits on top where pins overlap.
+        const ordered = [...pins].sort((a, b) => tiers[a.license_number].max_high_priority - tiers[b.license_number].max_high_priority);
+        for (const e of ordered) {
+          const t = tiers[e.license_number];
+          const fill = cssVar(t.tier === "redeemed" ? "--good" : "--serious");
+          const m = L.circleMarker([e.lat, e.lon], { renderer: s.renderer, radius: 7, weight: 2, color: ring,
+            fillColor: fill, fillOpacity: 1 });
+          const detail = `${t.max_high_priority} high-priority violations` + (t.repeat_shame ? ` · repeat (${t.shame_count}×)` : "") +
+            (t.tier === "redeemed" ? " · redeemed" : "");
+          m.bindTooltip(`<b>${titleCase(e.name).replace(/</g, "&lt;")}</b><span>${detail}</span>`,
+            { className: "tip", direction: "top", offset: [0, -8] });
+          m.on("click", () => onOpen(e.license_number));
+          m.addTo(s.layer);
+        }
+        if (pins.length === 1) s.map.setView([pins[0].lat, pins[0].lon], 14);
+        else if (pins.length) s.map.fitBounds(L.latLngBounds(pins.map((e) => [e.lat, e.lon])), { padding: [28, 28], maxZoom: 14 });
+      };
+      s.draw();
+    }, [items, tiers]);
+
+    if (!window.L) return null;                          // CDN blocked: the list below still works
+    return html`<div class="mapbox">
+      <div class="map" ref=${el} role="img" aria-label=${`Map of ${pins.length} Wall of Shame locations. The same places are listed below.`}></div>
+      <div class="maplegend">
+        <span class="k"><i class="pin" style=${{ background: "var(--serious)" }}></i>Wall of Shame</span>
+        ${hasRedeemed ? html`<span class="k"><i class="pin" style=${{ background: "var(--good)" }}></i>Redeemed</span>` : null}
+        <span class="note">Hover a pin for a summary; click or tap it to open that place's history. Pins are placed from the street address and can be a few doors off.
+          ${missing.length ? ` Not on the map (address couldn't be located): ${missing.map((e) => titleCase(e.name)).join(", ")}.` : ""}</span>
+      </div>
+    </div>`;
+  }
+
+  // ── everyone-else table ───────────────────────────────────────────────────
+  const COLS = [
+    { key: "name", label: "Establishment", get: (e) => e.name || "" },
+    { key: "city", label: "City", cls: "col-city", get: (e) => e.city || "" },
+    { key: "date", label: "Latest inspection", short: "Latest", get: (e) => (e.latest && e.latest.date) || "" },
+    { key: "high", label: "High priority", short: "High", num: true, get: (e) => (e.latest ? e.latest.high : -1) },
+    { key: "total", label: "All violations", short: "All", num: true, get: (e) => (e.latest ? e.latest.total : -1) },
+  ];
+
+  function EveryoneTable({ items }) {
+    const [sort, setSort] = useState({ key: "name", dir: 1 });
+    const rows = useMemo(() => {
+      const col = COLS.find((c) => c.key === sort.key);
+      return [...items].sort((a, b) => {
+        const x = col.get(a), y = col.get(b);
+        const r = typeof x === "number" ? x - y : String(x).localeCompare(String(y));
+        return r * sort.dir || (a.name || "").localeCompare(b.name || "");
+      });
+    }, [items, sort]);
+    const click = (key) => setSort((s) => ({ key, dir: s.key === key ? -s.dir : (key === "date" || key === "high" || key === "total" ? -1 : 1) }));
+    const arrow = (key) => (sort.key === key ? (sort.dir === 1 ? " ▲" : " ▼") : "");
+    const aria = (key) => (sort.key === key ? (sort.dir === 1 ? "ascending" : "descending") : "none");
+
+    return html`<div>
+      <div class="tablewrap" tabindex="0" aria-label="Everyone else, scrollable table">
+        <table class="list">
+          <thead><tr>
+            ${COLS.map((c) => html`<th key=${c.key} class=${(c.num ? "num " : "") + (c.cls || "")} aria-sort=${aria(c.key)}>
+              <button onClick=${() => click(c.key)} aria-label=${"Sort by " + c.label.toLowerCase()}>${c.short
+                ? html`<span class="d-only">${c.label}</span><span class="m-only">${c.short}</span>` : c.label}${arrow(c.key)}</button></th>`)}
+          </tr></thead>
+          <tbody>
+            ${rows.map((e) => {
+              const l = e.latest;
+              return html`<tr key=${e.license_number}>
+                <td><a href=${"#/r/" + e.license_number}>${titleCase(e.name)}</a><div class="addr">${titleCase(e.address)}<span class="m-only"> · ${titleCase(e.city)}</span></div></td>
+                <td class="col-city">${titleCase(e.city)}</td>
+                <td>${l ? html`${fmtDate(l.date)}<div class="sub col-type">${l.type}</div>` : html`<span class="zero">—</span>`}</td>
+                <td class="num">${l ? (l.high ? html`<span class="hp">${l.high}</span>` : html`<span class="zero">0</span>`) : "—"}</td>
+                <td class="num">${l ? (l.total ? l.total : html`<span class="zero">0</span>`) : "—"}</td>
+              </tr>`;
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div class="tablenote">${rows.length} establishments · click a column heading to sort · counts are from each place's latest inspection</div>
+    </div>`;
+  }
+
   // ── list view ─────────────────────────────────────────────────────────────
   function Card({ est, t, onOpen }) {
     const l = est.latest;
@@ -242,18 +417,20 @@
     </button>`;
   }
 
-  function Section({ tier, items, tiers, onOpen, why, initial = 24 }) {
+  function Section({ tier, items, tiers, onOpen, why, initial = 24, map = false, table = false }) {
     const [all, setAll] = useState(false);
-    const shown = all ? items : items.slice(0, initial);
+    const shown = table ? items : (all ? items : items.slice(0, initial));
     return html`<section id=${"tier-" + tier}>
       <div class="sh">
         <h2><span class="dot" style=${{ background: `var(--${TIER_STATUS[tier] === "plain" ? "rule-2" : TIER_STATUS[tier]})` }}></span> ${TIER_LABEL[tier]}</h2>
         <span class="n">${items.length}</span>
         ${why ? html`<span class="why">${why}</span>` : null}
       </div>
-      ${items.length ? html`<div class="grid">${shown.map((e) => html`<${Card} key=${e.license_number} est=${e} t=${tiers[e.license_number]} onOpen=${onOpen} />`)}</div>`
-                     : html`<div class="empty">Nobody here${tier === "closed" ? " — no emergency closures in this period" : ""}.</div>`}
-      ${items.length > shown.length ? html`<div class="more"><button class="link" onClick=${() => setAll(true)}>Show all ${items.length}</button></div>` : null}
+      ${map && items.length ? html`<${ShameMap} items=${items} tiers=${tiers} onOpen=${onOpen} />` : null}
+      ${!items.length ? html`<div class="empty">Nobody here${tier === "closed" ? " — no emergency closures in this period" : ""}.</div>`
+        : table ? html`<${EveryoneTable} items=${items} />`
+        : html`<div class="grid">${shown.map((e) => html`<${Card} key=${e.license_number} est=${e} t=${tiers[e.license_number]} onOpen=${onOpen} />`)}</div>`}
+      ${!table && items.length > shown.length ? html`<div class="more"><button class="link" onClick=${() => setAll(true)}>Show all ${items.length}</button></div>` : null}
     </section>`;
   }
 
@@ -279,6 +456,7 @@
       return g;
     }, [tiers, byLic, q]);
 
+    const shameItems = useMemo(() => [...groups.shame, ...groups.redeemed], [groups]);
     const jump = (tier) => document.getElementById("tier-" + (tier === "redeemed" ? "shame" : tier))?.scrollIntoView({ behavior: "smooth" });
     const period = view === "all" ? `since ${fmtDate(data.date_range.first_inspection)}` : `calendar ${view}`;
 
@@ -303,12 +481,12 @@
       <div class="wrap">
         <${Section} tier="closed" items=${groups.closed} tiers=${tiers} onOpen=${onOpen}
           why=${`Shut by a DBPR emergency order in ${period}, for conditions like pests or sewage. "Reopened" means a follow-up inspection cleared the order.`} />
-        <${Section} tier="shame" items=${[...groups.shame, ...groups.redeemed]} tiers=${tiers} onOpen=${onOpen}
+        <${Section} tier="shame" map=${true} items=${shameItems} tiers=${tiers} onOpen=${onOpen}
           why=${`At least one inspection with ${data.shame_threshold_high_priority} or more high-priority violations — the kind that can directly cause foodborne illness. ` +
                `Those marked Redeemed have since passed an inspection with zero violations; open the card to see it.`} />
         <${Section} tier="fame" items=${groups.fame} tiers=${tiers} onOpen=${onOpen}
           why="Most recent routine inspection found nothing at all, and nothing serious on record in this period." />
-        <${Section} tier="neutral" items=${groups.neutral} tiers=${tiers} onOpen=${onOpen} initial=${30}
+        <${Section} tier="neutral" table=${true} items=${groups.neutral} tiers=${tiers} onOpen=${onOpen}
           why="Inspected in this period with the ordinary run of minor findings." />
         <div class="foot">Source: Florida Department of Business &amp; Professional Regulation, Division of Hotels &amp; Restaurants — public inspection extracts for county 41.
           Each report is a snapshot of conditions at the time of inspection. Establishments are tracked by licence number; a new owner at the same address starts a fresh record.
