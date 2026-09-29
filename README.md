@@ -179,6 +179,22 @@ license_number,lat,lon,note
 It is applied on the next run. `python3 geocode.py --retry` re-tries every
 address that has not been placed.
 
+## Weekly digest
+
+`weekly_digest.py` builds a weekly summary for a private Claude dashboard: what
+arrived from the state since the last digest (tracked by record id, because DBPR
+often posts an inspection days after it happens), which of those were closures,
+had 5+ high-priority violations, or got sharply worse, with the inspectors' notes.
+
+```bash
+python3 weekly_digest.py build     # writes data/weekly_out/, prints a summary line
+python3 weekly_digest.py confirm   # after uploading: the next digest starts from here
+```
+
+It opens the database read-only and changes nothing in the repository; its state
+file and output folder are git-ignored. A scheduled Claude task on the maintainer's
+machine runs it every Monday and uploads the result.
+
 ## History (Phase 5)
 
 The tracker holds a **rolling two years** (`HISTORY_YEARS` in `dbpr_fetch.py`).

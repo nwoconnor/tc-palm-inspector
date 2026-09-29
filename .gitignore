@@ -18,3 +18,7 @@ data/phase1_summary.txt
 
 # The original hand-off bundle; its two files are already extracted at the root.
 files.zip
+
+# Private weekly digest: local state and upload files (never committed).
+data/weekly_state.json
+data/weekly_out/
