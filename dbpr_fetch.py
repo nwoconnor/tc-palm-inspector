@@ -58,6 +58,33 @@ def history_cutoff():
         return t.replace(year=t.year - HISTORY_YEARS, day=28).isoformat()
 
 
+def prune_history(conn, cutoff=None):
+    """Delete everything older than the two-year window, so it rolls forward daily.
+
+    Removes inspections (and their narratives), emergency closures, and alert
+    records dated before the cutoff, then any establishment left with no history
+    that is not on the current licence list. Safe for alerts: dropping the oldest
+    rows can only remove a later inspection's comparison baseline, never create
+    a new trigger. Returns a dict of counts; VACUUMs only when something went.
+    """
+    cutoff = cutoff or history_cutoff()
+    n = {
+        "inspections": conn.execute("DELETE FROM inspections WHERE inspection_date < ?", (cutoff,)).rowcount,
+        "closures": conn.execute("DELETE FROM closures WHERE closed_date < ?", (cutoff,)).rowcount,
+        "alerts": conn.execute("DELETE FROM alerts WHERE inspection_date < ?", (cutoff,)).rowcount,
+    }
+    n["establishments"] = conn.execute("""
+        DELETE FROM establishments
+        WHERE COALESCE(in_license_file, 0) = 0
+          AND license_number NOT IN (SELECT DISTINCT license_number FROM inspections)
+          AND license_number NOT IN (SELECT license_number FROM closures)""").rowcount
+    conn.commit()
+    if any(n.values()):
+        conn.execute("VACUUM")          # give the freed space back; the DB is committed to git
+    n["cutoff"] = cutoff
+    return n
+
+
 # Only these inspection types can put an establishment on the Wall of Fame.
 # "Food-Licensing Inspection" is a pre-opening paperwork check, not a hygiene
 # inspection, and a brand-new restaurant that has never been inspected for food
@@ -1039,6 +1066,10 @@ def main():
         f"Indian River closure rows loaded: {total_closures}")
 
     conn.commit()
+    pr = prune_history(conn)
+    if any(v for k, v in pr.items() if k != "cutoff"):
+        log(f"\n  two-year window: removed {pr['inspections']} inspections, {pr['closures']} closures "
+            f"older than {pr['cutoff']}")
 
     # 5. Sanity stats
     log("\n[5] Database")

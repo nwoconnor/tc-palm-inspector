@@ -168,7 +168,15 @@ def main():
     if new_eos:
         say(f"  ~ closure files to try: {', '.join(new_eos)}")
 
-    if not to_fetch and not new_eos and not args.force:
+    # Roll the two-year window forward. Records age out whether or not DBPR has
+    # anything new, so this runs before the early exit.
+    pr = ingest.prune_history(conn)
+    pruned = sum(v for k, v in pr.items() if k != "cutoff")
+    if pruned:
+        say(f"  - two-year window (on or after {pr['cutoff']}): removed {pr['inspections']} inspections, "
+            f"{pr['closures']} closures, {pr['alerts']} alert records, {pr['establishments']} establishments")
+
+    if not to_fetch and not new_eos and not args.force and not pruned:
         say("\nNothing has changed upstream. Done.")
         write_output(False)
         conn.close()
@@ -176,7 +184,7 @@ def main():
 
     # ── 2. Download and confirm by hash ──────────────────────────────────────
     say("\n[2] Downloading")
-    changed = args.force
+    changed = args.force or bool(pruned)
     bodies = {}
     for fname, url in to_fetch.items():
         body = ingest.download(url, ingest.RAW_DIR / fname)

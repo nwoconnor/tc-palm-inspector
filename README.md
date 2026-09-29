@@ -181,8 +181,12 @@ address that has not been placed.
 
 ## History (Phase 5)
 
-The tracker holds the **most recent two years** and never pulls anything older
-(`HISTORY_YEARS` in `dbpr_fetch.py`). DBPR does publish inspection files back to
+The tracker holds a **rolling two years** (`HISTORY_YEARS` in `dbpr_fetch.py`).
+It never downloads anything older, and every daily run deletes whatever has aged
+past the cutoff — inspections with their narratives, emergency closures, alert
+records, and establishments left with no history that are no longer licensed.
+The prune runs even on days DBPR has nothing new, since records age out anyway.
+Older versions of the database remain in the repository's git history. DBPR does publish inspection files back to
 2016, in four different places and formats, all linked from the public-records
 page; `backfill.py` knows all of them but only loads the ones inside the window:
 
@@ -221,7 +225,8 @@ nothing has happened:
 
 1. **Change check.** A HEAD request on the two district files compares Last-Modified
    with the previous run, and the last four Sundays are checked for closure files we
-   have not seen. If nothing moved, it stops — no download, no rebuild, no commit.
+   have not seen. Anything older than two years is deleted. If nothing moved and
+   nothing aged out, it stops — no download, no rebuild, no commit.
 2. **Download and confirm.** Anything that looks changed is downloaded and its SHA-256
    compared with the last run, so a touched-but-identical file is still skipped.
 3. **Ingest, narratives, alerts, export.** New rows go into the database, up to 400
